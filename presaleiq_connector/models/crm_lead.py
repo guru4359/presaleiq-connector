@@ -21,7 +21,7 @@ _POLL_MAX_TRIES = 20
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
 
-    # ââ Analysis fields âââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Analysis fields ───────────────────────────────────────────────────
     presaleiq_analysis_url = fields.Char(
         string='PresaleIQ Analysis URL',
         readonly=True,
@@ -48,7 +48,7 @@ class CrmLead(models.Model):
         help='Latest status returned by PresaleIQ (pending / processing / complete / error).',
     )
 
-    # ââ License Sizing fields âââââââââââââââââââââââââââââââââââââââââââââ
+    # ── License Sizing fields ─────────────────────────────────────────────
     presaleiq_license_url = fields.Char(
         string='License Sizing URL',
         readonly=True,
@@ -65,7 +65,7 @@ class CrmLead(models.Model):
         default='',
     )
 
-    # ââ Live Agent fields âââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Live Agent fields ─────────────────────────────────────────────────
     presaleiq_session_id = fields.Integer(
         string='Live Agent Session ID',
         readonly=True,
@@ -77,7 +77,7 @@ class CrmLead(models.Model):
         help='Battle card dashboard for the active/last live session.',
     )
 
-    # ââ Push fields âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Push fields ───────────────────────────────────────────────────────
     presaleiq_push_status = fields.Char(
         string='Last Push Status',
         readonly=True,
@@ -90,7 +90,7 @@ class CrmLead(models.Model):
         default=0,
     )
 
-    # ââ helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── helpers ──────────────────────────────────────────────────────────
 
     def _presaleiq_config(self):
         """Return (url, api_key, platform) from system parameters."""
@@ -101,7 +101,7 @@ class CrmLead(models.Model):
         if not url or not api_key:
             raise UserError(_(
                 'PresaleIQ is not configured. '
-                'Go to Settings â Technical â PresaleIQ and enter your '
+                'Go to Settings → Technical → PresaleIQ and enter your '
                 'Instance URL and API Key.'
             ))
         return url, api_key, platform
@@ -172,7 +172,7 @@ class CrmLead(models.Model):
         except Exception as e:
             raise UserError(_('Could not reach PresaleIQ: %(err)s', err=str(e)))
 
-    # ââ background polling ââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── background polling ────────────────────────────────────────────────
 
     def _presaleiq_poll_background(self, base_url, api_key, analysis_id, lead_id,
                                    field_prefix='presaleiq'):
@@ -222,7 +222,7 @@ class CrmLead(models.Model):
                     attempt + 1, analysis_id, exc,
                 )
 
-    # ââ actions ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── actions ──────────────────────────────────────────────────────────
 
     def action_analyze_with_presaleiq(self):
         """Send this opportunity to PresaleIQ for AI analysis (SOW + User Stories)."""
@@ -293,7 +293,7 @@ class CrmLead(models.Model):
             f'{base_url}/api/v1/analyze',
             api_key,
             payload_dict={
-                'title':                f'License Sizing â {self.name or "Odoo Opportunity"}',
+                'title':                f'License Sizing — {self.name or "Odoo Opportunity"}',
                 'transcript':           transcript,
                 'platform':             platform,
                 'input_kind':           'license_sizing',
@@ -391,7 +391,7 @@ class CrmLead(models.Model):
 
         self.message_post(
             body=_(
-                '<p><strong>PresaleIQ â %(platform)s push %(status)s</strong></p>'
+                '<p><strong>PresaleIQ → %(platform)s push %(status)s</strong></p>'
                 '<p>%(created)s stories created, %(failed)s failed.</p>'
                 '%(errors)s',
                 platform=platform_label,
@@ -413,7 +413,7 @@ class CrmLead(models.Model):
             'params': {
                 'title':   _('Push to %(platform)s', platform=platform_label),
                 'message': _(
-                    '%(status)s â %(created)s stories pushed, %(failed)s failed.',
+                    '%(status)s — %(created)s stories pushed, %(failed)s failed.',
                     status=push_status.title(),
                     created=created,
                     failed=failed,
@@ -469,7 +469,7 @@ class CrmLead(models.Model):
                     'Status: %(status)s%(stories)s',
                     status=status,
                     stories=(
-                        f' â {story_count} user stories generated'
+                        f' — {story_count} user stories generated'
                         if story_count else ''
                     ),
                 ),
@@ -478,7 +478,7 @@ class CrmLead(models.Model):
             },
         }
 
-    # ââ auto-push on creation ââââââââââââââââââââââââââââââââââââââââââââ
+    # ── auto-push on creation ────────────────────────────────────────────
 
     @api.model_create_multi
     def create(self, vals_list):
