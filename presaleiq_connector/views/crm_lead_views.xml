@@ -47,8 +47,16 @@
           <group string="AI Analysis">
             <field name="presaleiq_last_analyzed" readonly="1"/>
             <field name="presaleiq_story_count" readonly="1"/>
+            <field name="presaleiq_status" readonly="1"/>
             <field name="presaleiq_analysis_url" widget="url" readonly="1"/>
           </group>
+          <div class="mt-2" attrs="{'invisible': [('presaleiq_analysis_id', '=', 0)]}">
+            <button name="action_refresh_presaleiq_status"
+                    type="object"
+                    string="Refresh Status"
+                    class="btn btn-secondary btn-sm"
+                    icon="fa-refresh"/>
+          </div>
           <div class="o_form_sheet_bg mt-3" attrs="{'invisible': [('presaleiq_analysis_url', '!=', False)]}">
             <p class="text-muted">
               No analysis yet. Click <strong>Analyze with PresaleIQ</strong> above
