@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PresaleIQ — AI Pre-Sales Agent',
-    'version': '17.0.1.2.0',
+    'version': '17.0.1.3.0',
     'category': 'Sales/CRM',
     'summary': 'Turn discovery calls into SOWs, User Stories & Effort Estimates — automatically.',
     'description': """
@@ -25,7 +25,7 @@ listens to discovery calls and generates:
 5. Once analysis is complete, click **"Push to Platform"** to push stories
    directly into ServiceNow, Jira, or your configured ITSM platform.
 
-**Features (v1.2)**
+**Features (v1.3)**
 
 - One-click SOW + User Stories analysis from the Opportunity form
 - License Sizing report with one click
