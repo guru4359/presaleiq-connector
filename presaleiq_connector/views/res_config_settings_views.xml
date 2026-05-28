@@ -18,6 +18,10 @@
                      help="Your PresaleIQ REST API key. Go to PresaleIQ → Settings → API Keys to generate one.">
               <field name="presaleiq_api_key" password="True"/>
             </setting>
+            <setting string="ITSM Platform"
+                     help="The ITSM platform your PresaleIQ subscription targets (ServiceNow, Salesforce, etc.). This tells the AI which terminology and modules to use.">
+              <field name="presaleiq_platform"/>
+            </setting>
             <setting string="Auto-analyze new Opportunities"
                      help="Automatically send every new Opportunity to PresaleIQ when it is created.">
               <field name="presaleiq_auto_push"/>
