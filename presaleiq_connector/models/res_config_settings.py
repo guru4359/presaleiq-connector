@@ -16,6 +16,21 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='presaleiq.api_key',
         help='Your PresaleIQ REST API key. Generate one in PresaleIQ → Settings → API Keys.',
     )
+    presaleiq_platform = fields.Selection(
+        string='ITSM Platform',
+        config_parameter='presaleiq.platform',
+        selection=[
+            ('servicenow',   'ServiceNow'),
+            ('salesforce',   'Salesforce'),
+            ('atlassian',    'Atlassian (Jira)'),
+            ('zendesk',      'Zendesk'),
+            ('bmc_helix',    'BMC Helix'),
+            ('ivanti',       'Ivanti'),
+            ('manageengine', 'ManageEngine'),
+        ],
+        default='servicenow',
+        help='The ITSM platform your PresaleIQ subscription targets. Used to tailor AI output.',
+    )
     presaleiq_auto_push = fields.Boolean(
         string='Auto-push new Opportunities',
         config_parameter='presaleiq.auto_push',
