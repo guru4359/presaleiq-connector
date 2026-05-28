@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <record id="res_config_settings_view_form_presaleiq" model="ir.ui.view">
+    <field name="name">res.config.settings.view.form.presaleiq</field>
+    <field name="model">res.config.settings</field>
+    <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+    <field name="arch" type="xml">
+      <div id="sale_config_settings" position="before">
+        <app string="PresaleIQ" name="presaleiq_connector"
+             img="/presaleiq_connector/static/description/icon.png">
+          <block title="PresaleIQ — AI Pre-Sales Agent">
+            <setting string="Instance URL"
+                     help="Base URL of your PresaleIQ instance. Default: https://presaleiq.ai">
+              <field name="presaleiq_url" placeholder="https://presaleiq.ai"/>
+            </setting>
+            <setting string="API Key"
+                     help="Your PresaleIQ REST API key. Go to PresaleIQ → Settings → API Keys to generate one.">
+              <field name="presaleiq_api_key" password="True"/>
+            </setting>
+            <setting string="Auto-analyze new Opportunities"
+                     help="Automatically send every new Opportunity to PresaleIQ when it is created.">
+              <field name="presaleiq_auto_push"/>
+            </setting>
+          </block>
+        </app>
+      </div>
+    </field>
+  </record>
+
+</odoo>
