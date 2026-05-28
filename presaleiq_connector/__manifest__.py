@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PresaleIQ — AI Pre-Sales Agent',
-    'version': '17.0.1.1.0',
+    'version': '17.0.1.2.0',
     'category': 'Sales/CRM',
     'summary': 'Turn discovery calls into SOWs, User Stories & Effort Estimates — automatically.',
     'description': """
@@ -19,18 +19,25 @@ listens to discovery calls and generates:
 **How it works**
 
 1. Open any CRM Opportunity.
-2. Click **"Analyze with PresaleIQ"**.
-3. PresaleIQ analyses the opportunity description and any attached transcript.
-4. Results (SOW, stories, effort) are automatically posted as a chatter note
-   on the opportunity.
+2. Click **"Analyze with PresaleIQ"** to generate a SOW + User Stories.
+3. Click **"License Sizing"** to get platform license recommendations.
+4. Click **"Live Agent"** to send an AI bot to your live discovery call.
+5. Once analysis is complete, click **"Push to Platform"** to push stories
+   directly into ServiceNow, Jira, or your configured ITSM platform.
 
-**Features**
+**Features (v1.2)**
 
-- One-click analysis from the Opportunity form
-- Results posted directly to the opportunity chatter
-- Configurable PresaleIQ instance URL and API key
+- One-click SOW + User Stories analysis from the Opportunity form
+- License Sizing report with one click
+- Live Agent: AI bot joins your Zoom/Teams/Meet call and provides real-time
+  battle cards, objection handling, and competitive intelligence
+- Push to Platform: push generated User Stories directly to ServiceNow,
+  Jira, or any other connected ITSM platform — no copy/paste
+- Results and status tracked on the Opportunity record
+- Background polling — story count auto-updates when analysis completes
+- Supports ServiceNow, Salesforce, Atlassian (Jira), Zendesk, BMC Helix,
+  Ivanti, and ManageEngine
 - Works with Odoo Online, Odoo.sh, and on-premise
-- Supports Odoo 16 and 17
 
 **About PresaleIQ**
 
@@ -50,6 +57,7 @@ Setup: install the module → Settings → PresaleIQ → enter your API key.
         'security/ir.model.access.csv',
         'data/res_config_settings.xml',
         'views/res_config_settings_views.xml',
+        'views/presaleiq_wizard_views.xml',
         'views/crm_lead_views.xml',
     ],
     'images': ['static/description/banner.png'],
