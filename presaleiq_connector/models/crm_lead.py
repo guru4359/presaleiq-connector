@@ -396,10 +396,13 @@ class CrmLead(models.Model):
                         lead = env['crm.lead'].browse(lead_id)
                         lead.message_post(
                             body=Markup(
-                                '<p><strong>PresaleIQ — {doc_type} documents ready</strong></p>'
-                                '<p>Analysis #{analysis_id} completed. '
-                                'PDF and Excel attached below.</p>'
-                                '<p><a href="{url}" target="_blank">View full results →</a></p>'
+                                '<p><img src="/web/static/img/favicon.ico" '
+                                'style="width:16px;height:16px;margin-right:6px;vertical-align:middle;"/>'
+                                '<strong>PresaleIQ — {doc_type} ready</strong></p>'
+                                '<p>Analysis #{analysis_id} is complete — '
+                                '<strong>{doc_type}</strong> documents attached below (PDF + Excel).</p>'
+                                '<p><a href="{url}" target="_blank">'
+                                '📊 View full results on presaleiq.ai →</a></p>'
                             ).format(
                                 doc_type=doc_type,
                                 analysis_id=analysis_id,
@@ -407,7 +410,7 @@ class CrmLead(models.Model):
                             ),
                             attachment_ids=attachment_ids,
                             message_type='comment',
-                            subtype_xmlid='mail.mt_note',
+                            subtype_xmlid='mail.mt_comment',
                         )
                         cr.commit()
                     _logger.info(
