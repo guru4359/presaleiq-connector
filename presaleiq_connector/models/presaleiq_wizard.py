@@ -76,8 +76,21 @@ class PresaleIQLiveAgentWizard(models.TransientModel):
                 err=data.get('error', 'unknown error'),
             ))
 
+        # Close the wizard and show a success toast.
+        # The "Live Agent Dashboard" button in the Opportunity header opens the
+        # battle card view — no need to keep this dialog open.
         return {
-            'type':   'ir.actions.act_url',
-            'url':    dashboard,
-            'target': 'new',
+            'type': 'ir.actions.client',
+            'tag':  'display_notification',
+            'params': {
+                'title':   _('Live Agent Started'),
+                'message': _(
+                    '%(agent)s is joining the meeting. '
+                    'Click "Live Agent Dashboard" above to open the battle card view.',
+                    agent=self.agent_name,
+                ),
+                'type':   'success',
+                'sticky': False,
+                'next':   {'type': 'ir.actions.act_window_close'},
+            },
         }

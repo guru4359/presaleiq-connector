@@ -633,6 +633,66 @@ class CrmLead(models.Model):
             raise UserError(_('No Live Agent session found for this opportunity.'))
         return {'type': 'ir.actions.act_url', 'url': self.presaleiq_session_url, 'target': 'new'}
 
+    def action_refresh_live_session(self):
+        """Check live session status and auto-attach post-meeting notes when the call ends."""
+        self.ensure_one()
+        if not self.presaleiq_session_id:
+            raise UserError(_('No Live Agent session found. Click "Live Agent" first.'))
+
+        base_url, api_key, _platform = self._presaleiq_config()
+        data = self._presaleiq_http(
+            f'{base_url}/api/v1/engage/{self.presaleiq_session_id}/status',
+            api_key,
+            payload_dict=None,
+            method='GET',
+        )
+
+        session_status = data.get('status', 'unknown')
+        analysis_id    = data.get('analysis_id')
+
+        msg_type = 'info'
+        msg_body = ''
+
+        if session_status == 'ended' and analysis_id:
+            # Post-meeting analysis is ready — attach meeting notes PDF + XLSX
+            existing = self.env['ir.attachment'].search_count([
+                ('res_model', '=', 'crm.lead'),
+                ('res_id',    '=', self.id),
+                ('name',      'like', 'PresaleIQ_Meeting'),
+            ])
+            if not existing:
+                db_name = self.env.cr.dbname
+                import threading as _thr
+                _thr.Thread(
+                    target=self._presaleiq_attach_documents,
+                    args=(base_url, api_key,
+                          analysis_id, self.id,
+                          'PresaleIQ_MeetingNotes', db_name),
+                    daemon=True,
+                ).start()
+                msg_body = _('Meeting ended — downloading notes & transcript…')
+            else:
+                msg_body = _('Meeting notes already attached.')
+            msg_type = 'success'
+        elif session_status == 'ended':
+            msg_body = _('Meeting ended. No post-meeting analysis available yet — try again in a moment.')
+        elif session_status == 'active':
+            msg_body = _('Session is still active. Refresh after the call ends to get meeting notes.')
+        else:
+            msg_body = _('Session status: %(s)s', s=session_status)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag':  'display_notification',
+            'params': {
+                'title':   _('Live Agent Status'),
+                'message': msg_body,
+                'type':    msg_type,
+                'sticky':  False,
+                'next':    {'type': 'ir.actions.client', 'tag': 'reload'},
+            },
+        }
+
     def action_refresh_presaleiq_status(self):
         """Manually refresh the analysis status from PresaleIQ."""
         self.ensure_one()

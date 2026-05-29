@@ -108,6 +108,13 @@
                  invisible="presaleiq_session_id == 0">
             <field name="presaleiq_session_url" widget="url" readonly="1"/>
           </group>
+          <div class="mt-2 mb-3" invisible="presaleiq_session_id == 0">
+            <button name="action_refresh_live_session"
+                    type="object"
+                    string="Refresh Meeting Notes"
+                    class="btn btn-secondary btn-sm"
+                    icon="fa-refresh"/>
+          </div>
 
           <!-- Last Push section -->
           <group string="Last Platform Push"
