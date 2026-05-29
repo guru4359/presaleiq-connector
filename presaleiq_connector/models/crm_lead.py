@@ -328,7 +328,7 @@ class CrmLead(models.Model):
 
     def _presaleiq_attach_documents(self, base_url, api_key, analysis_id, lead_id,
                                     prefix='PresaleIQ_SOW', db_name=None):
-        """Download PDF + XLSX from PresaleIQ and attach to the opportunity via ORM."""
+        """Download PDF + XLSX from PresaleIQ and post as chatter message on the opportunity."""
         try:
             from odoo import SUPERUSER_ID
             from odoo.modules.registry import Registry as OdooRegistry
@@ -344,6 +344,9 @@ class CrmLead(models.Model):
 
             _logger.info('PresaleIQ: starting document attach for analysis %d on db %s', analysis_id, _db)
 
+            attachment_ids = []
+            registry = OdooRegistry(_db)
+
             for fmt, fname, mimetype in formats:
                 try:
                     url = f'{base_url}/api/v1/analyze/{analysis_id}/download/{fmt}'
@@ -355,7 +358,6 @@ class CrmLead(models.Model):
                     _logger.info('PresaleIQ: downloaded %s (%d bytes)', fmt, len(file_bytes))
                     encoded = base64.b64encode(file_bytes).decode()
 
-                    registry = OdooRegistry(_db)
                     with registry.cursor() as cr:
                         from odoo import api as odoo_api
                         env = odoo_api.Environment(cr, SUPERUSER_ID, {})
@@ -365,7 +367,7 @@ class CrmLead(models.Model):
                             ('res_id',    '=', lead_id),
                             ('name',      '=', fname),
                         ]).unlink()
-                        env['ir.attachment'].create({
+                        att = env['ir.attachment'].create({
                             'name':      fname,
                             'res_model': 'crm.lead',
                             'res_id':    lead_id,
@@ -373,6 +375,7 @@ class CrmLead(models.Model):
                             'datas':     encoded,
                             'mimetype':  mimetype,
                         })
+                        attachment_ids.append(att.id)
                         cr.commit()
                     _logger.info('PresaleIQ: attached %s to crm.lead %s', fname, lead_id)
                 except Exception as exc:
@@ -380,6 +383,40 @@ class CrmLead(models.Model):
                         'PresaleIQ: could not attach %s for analysis %d: %s',
                         fmt, analysis_id, exc,
                     )
+
+            # Post a chatter message with the attachments so they appear visibly
+            # in the PresaleIQ conversation thread (not just buried in Internal Notes).
+            if attachment_ids:
+                try:
+                    doc_type = 'License Sizing' if 'LicenseSizing' in prefix else 'SOW + User Stories'
+                    results_url = f'{base_url}/results/{analysis_id}'
+                    with registry.cursor() as cr:
+                        from odoo import api as odoo_api
+                        env = odoo_api.Environment(cr, SUPERUSER_ID, {})
+                        lead = env['crm.lead'].browse(lead_id)
+                        lead.message_post(
+                            body=Markup(
+                                '<p><strong>PresaleIQ — {doc_type} documents ready</strong></p>'
+                                '<p>Analysis #{analysis_id} completed. '
+                                'PDF and Excel attached below.</p>'
+                                '<p><a href="{url}" target="_blank">View full results →</a></p>'
+                            ).format(
+                                doc_type=doc_type,
+                                analysis_id=analysis_id,
+                                url=results_url,
+                            ),
+                            attachment_ids=attachment_ids,
+                            message_type='comment',
+                            subtype_xmlid='mail.mt_note',
+                        )
+                        cr.commit()
+                    _logger.info(
+                        'PresaleIQ: posted chatter message with %d attachments for analysis %d',
+                        len(attachment_ids), analysis_id,
+                    )
+                except Exception as exc:
+                    _logger.warning('PresaleIQ: could not post chatter message: %s', exc)
+
         except Exception as exc:
             _logger.warning('PresaleIQ: _presaleiq_attach_documents failed: %s', exc)
 
