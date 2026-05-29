@@ -16,19 +16,33 @@ listens to discovery calls and generates:
 * Effort Estimates & LLD
 * License Sizing recommendations
 
+**Requirements**
+
+This connector requires a free PresaleIQ account at https://presaleiq.ai.
+
+Sign up takes 2 minutes — no credit card required for the trial. Once signed up,
+generate your API key under Settings → API Keys and paste it into
+Odoo → Settings → PresaleIQ → API Key.
+
+All CRM users in your Odoo instance share the same PresaleIQ account quota,
+so one account covers your entire team.
+
 **How it works**
 
-1. Open any CRM Opportunity.
-2. Click **"Analyze with PresaleIQ"** to generate a SOW + User Stories.
-3. Once complete, SOW (PDF + XLSX) auto-attaches to the Opportunity.
-4. Click **"License Sizing"** to get platform license recommendations.
-5. Click **"Live Agent"** to send an AI bot to your live discovery call.
+1. Sign up free at https://presaleiq.ai and copy your API key.
+2. In Odoo: Settings → PresaleIQ → paste your API key → Save.
+3. Open any CRM Opportunity and click **"Analyze with PresaleIQ"**.
+4. SOW + User Stories (PDF + XLSX) auto-attach to the Opportunity when ready.
+5. Click **"License Sizing"** to get platform license recommendations.
+6. Click **"Live Agent"** to send an AI bot to your live discovery call.
 
-**Features (v1.6)**
+**Features (v1.8)**
 
 - One-click SOW + User Stories analysis from the Opportunity form
 - SOW PDF + XLSX automatically attached to the Opportunity on completion
 - License Sizing PDF + XLSX automatically attached on completion
+- Results visible directly in the CRM chatter — PDF and Excel download links
+  appear as a PresaleIQ notification in the Opportunity activity thread
 - Live Agent: AI bot joins your Zoom/Teams/Meet call and provides real-time
   battle cards, objection handling, and competitive intelligence
 - Results and status tracked on the Opportunity record
@@ -44,7 +58,7 @@ PresaleIQ (presaleiq.ai) is an AI pre-sales platform trusted by ServiceNow,
 Salesforce, BMC Helix, and 12+ enterprise platform consultants worldwide.
 Turn every discovery call into a signed contract faster.
 
-Setup: install the module → Settings → PresaleIQ → enter your API key.
+Questions? Email support@presaleiq.ai
     """,
     'author': 'PresaleIQ.ai',
     'website': 'https://presaleiq.ai',
