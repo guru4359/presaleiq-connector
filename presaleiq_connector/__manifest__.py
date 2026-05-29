@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PresaleIQ — AI Pre-Sales Agent',
-    'version': '17.0.1.11.0',
+    'version': '17.0.1.19.0',
     'category': 'Sales/CRM',
     'summary': 'Turn discovery calls into SOWs, User Stories & Effort Estimates — automatically.',
     'description': """
@@ -65,13 +65,14 @@ Questions? Email support@presaleiq.ai
     'license': 'OPL-1',
     'price': 0.00,
     'currency': 'USD',
-    'depends': ['crm', 'mail'],
+    'depends': ['crm', 'mail', 'sale'],
     'data': [
         'security/ir.model.access.csv',
         'data/res_config_settings.xml',
         'views/res_config_settings_views.xml',
         'views/presaleiq_wizard_views.xml',
         'views/crm_lead_views.xml',
+        'views/sale_order_views.xml',
     ],
     'images': ['static/description/banner.png'],
     'installable': True,

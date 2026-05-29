@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-  <!-- ── Opportunity form: action buttons + smart buttons ───────────────── -->
-  <record id="crm_lead_view_form_presaleiq" model="ir.ui.view">
-    <field name="name">crm.lead.view.form.presaleiq</field>
-    <field name="model">crm.lead</field>
-    <!-- FIX: crm_lead_view_form is the opportunity form (crm_lead_all_leads is a list view) -->
-    <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+  <!-- ── Sales Order form: action buttons + smart button ────────────────── -->
+  <record id="sale_order_view_form_presaleiq" model="ir.ui.view">
+    <field name="name">sale.order.view.form.presaleiq</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
 
-      <!-- Smart buttons (top-right pill area) — no invisible here, fields not in context -->
+      <!-- Smart buttons (top-right pill area) -->
       <div name="button_box" position="inside">
         <button name="action_open_presaleiq"
                 type="object"
@@ -22,19 +21,9 @@
             </span>
           </div>
         </button>
-
-        <button name="action_open_live_agent_dashboard"
-                type="object"
-                class="oe_stat_button"
-                icon="fa-microphone">
-          <div class="o_stat_info">
-            <span class="o_stat_text">Live Agent</span>
-            <span class="o_stat_value">Dashboard</span>
-          </div>
-        </button>
       </div>
 
-      <!-- Primary action buttons — FIX: target <header>, not button_box -->
+      <!-- Primary action buttons -->
       <header position="inside">
         <button name="action_analyze_with_presaleiq"
                 type="object"
@@ -46,38 +35,30 @@
                 string="License Sizing"
                 class="btn btn-secondary"
                 icon="fa-calculator"/>
-        <button name="action_start_live_agent_presaleiq"
-                type="object"
-                string="Live Agent"
-                class="btn btn-secondary"
-                icon="fa-microphone"/>
       </header>
 
     </field>
   </record>
 
-  <!-- ── PresaleIQ tab in opportunity form ───────────────────────────────── -->
-  <record id="crm_lead_view_form_presaleiq_tab" model="ir.ui.view">
-    <field name="name">crm.lead.view.form.presaleiq.tab</field>
-    <field name="model">crm.lead</field>
-    <!-- FIX: same inherit_id correction -->
-    <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+  <!-- ── PresaleIQ tab in Sales Order form ──────────────────────────────── -->
+  <record id="sale_order_view_form_presaleiq_tab" model="ir.ui.view">
+    <field name="name">sale.order.view.form.presaleiq.tab</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
       <xpath expr="//notebook" position="inside">
         <page name="presaleiq" string="PresaleIQ">
 
           <!-- Hidden fields needed for invisible modifiers in Odoo 17 -->
-          <field name="presaleiq_analysis_id"        invisible="1"/>
+          <field name="presaleiq_analysis_id"         invisible="1"/>
           <field name="presaleiq_license_analysis_id" invisible="1"/>
-          <field name="presaleiq_session_id"          invisible="1"/>
-          <field name="presaleiq_session_url"         invisible="1"/>
 
           <!-- Platform selector -->
           <group string="Platform">
             <field name="presaleiq_platform"
                    widget="selection"
                    placeholder="Use global default (set in Settings → PresaleIQ)"
-                   help="Platform being sold. Overrides the global setting for this opportunity only. Affects questionnaire, SOW prompts, and licence sizing."/>
+                   help="Platform being sold. Overrides the global setting for this order only. Affects questionnaire, SOW prompts, and licence sizing."/>
           </group>
 
           <!-- Transcript Upload -->
@@ -96,7 +77,6 @@
             <field name="presaleiq_status"         readonly="1"/>
             <field name="presaleiq_analysis_url"   widget="url" readonly="1"/>
           </group>
-          <!-- FIX: inline invisible replaces attrs -->
           <div class="mt-2 mb-3" invisible="presaleiq_analysis_id == 0">
             <button name="action_refresh_presaleiq_status"
                     type="object"
@@ -132,19 +112,6 @@
                    invisible="presaleiq_license_analysis_id == 0"/>
           </group>
 
-          <!-- Live Agent section -->
-          <group string="Live Agent"
-                 invisible="presaleiq_session_url == False">
-            <field name="presaleiq_session_url" widget="url" readonly="1"/>
-            <div colspan="2" class="mt-2 mb-1">
-              <button name="action_refresh_live_session"
-                      type="object"
-                      string="Refresh Meeting Notes"
-                      class="btn btn-secondary btn-sm"
-                      icon="fa-refresh"/>
-            </div>
-          </group>
-
           <!-- Last Push section -->
           <group string="Last Platform Push"
                  invisible="presaleiq_push_status == ''">
@@ -157,12 +124,10 @@
                invisible="presaleiq_analysis_url != False">
             <p class="text-muted">
               No analysis yet. Click <strong>Analyze with PresaleIQ</strong> above
-              to generate a SOW, User Stories, and Effort Estimate.<br/>
+              to generate a SOW, User Stories, and Effort Estimate for this Sales Order.<br/>
               For licence sizing: click <strong>Get Questionnaire</strong> in the
               Licence Sizing section, send the blank DOCX to your customer, attach
-              their completed version here, then click <strong>Run License Sizing</strong>.<br/>
-              Use <strong>Live Agent</strong> to send an AI bot to your next
-              discovery call.
+              their completed version here, then click <strong>Run License Sizing</strong>.
             </p>
           </div>
 

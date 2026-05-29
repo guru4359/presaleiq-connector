@@ -55,6 +55,14 @@ class PresaleIQLiveAgentWizard(models.TransientModel):
         dashboard   = data.get('dashboard_url') or f'{base_url}/engage/{session_id}'
         status      = data.get('status', 'active')
 
+        # If session_id not returned explicitly, extract from the dashboard URL
+        # e.g. https://presaleiq.ai/engage/29 → 29
+        if not session_id and dashboard:
+            try:
+                session_id = int(dashboard.rstrip('/').split('/')[-1])
+            except (ValueError, IndexError):
+                pass
+
         lead.sudo().write({
             'presaleiq_session_id':  session_id or 0,
             'presaleiq_session_url': dashboard,
