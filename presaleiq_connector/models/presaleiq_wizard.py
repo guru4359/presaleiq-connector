@@ -76,21 +76,13 @@ class PresaleIQLiveAgentWizard(models.TransientModel):
                 err=data.get('error', 'unknown error'),
             ))
 
-        # Close the wizard and show a success toast.
-        # The "Live Agent Dashboard" button in the Opportunity header opens the
-        # battle card view — no need to keep this dialog open.
+        # Navigate back to the Opportunity form — more reliable than act_window_close
+        # in Odoo 17 because it replaces the browser history entry so the wizard
+        # cannot re-appear when the user switches tabs and comes back.
         return {
-            'type': 'ir.actions.client',
-            'tag':  'display_notification',
-            'params': {
-                'title':   _('Live Agent Started'),
-                'message': _(
-                    '%(agent)s is joining the meeting. '
-                    'Click "Live Agent Dashboard" above to open the battle card view.',
-                    agent=self.agent_name,
-                ),
-                'type':   'success',
-                'sticky': False,
-                'next':   {'type': 'ir.actions.act_window_close'},
-            },
+            'type':      'ir.actions.act_window',
+            'res_model': 'crm.lead',
+            'res_id':    self.lead_id.id,
+            'view_mode': 'form',
+            'target':    'current',
         }
