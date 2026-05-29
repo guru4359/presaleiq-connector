@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PresaleIQ — AI Pre-Sales Agent',
-    'version': '17.0.1.3.0',
+    'version': '17.0.1.6.0',
     'category': 'Sales/CRM',
     'summary': 'Turn discovery calls into SOWs, User Stories & Effort Estimates — automatically.',
     'description': """
@@ -20,21 +20,20 @@ listens to discovery calls and generates:
 
 1. Open any CRM Opportunity.
 2. Click **"Analyze with PresaleIQ"** to generate a SOW + User Stories.
-3. Click **"License Sizing"** to get platform license recommendations.
-4. Click **"Live Agent"** to send an AI bot to your live discovery call.
-5. Once analysis is complete, click **"Push to Platform"** to push stories
-   directly into ServiceNow, Jira, or your configured ITSM platform.
+3. Once complete, SOW (PDF + XLSX) auto-attaches to the Opportunity.
+4. Click **"License Sizing"** to get platform license recommendations.
+5. Click **"Live Agent"** to send an AI bot to your live discovery call.
 
-**Features (v1.3)**
+**Features (v1.6)**
 
 - One-click SOW + User Stories analysis from the Opportunity form
-- License Sizing report with one click
+- SOW PDF + XLSX automatically attached to the Opportunity on completion
+- License Sizing PDF + XLSX automatically attached on completion
 - Live Agent: AI bot joins your Zoom/Teams/Meet call and provides real-time
   battle cards, objection handling, and competitive intelligence
-- Push to Platform: push generated User Stories directly to ServiceNow,
-  Jira, or any other connected ITSM platform — no copy/paste
 - Results and status tracked on the Opportunity record
-- Background polling — story count auto-updates when analysis completes
+- Background polling — story count and documents auto-update when complete
+- Refresh Status re-triggers document download if attachment was missed
 - Supports ServiceNow, Salesforce, Atlassian (Jira), Zendesk, BMC Helix,
   Ivanti, and ManageEngine
 - Works with Odoo Online, Odoo.sh, and on-premise

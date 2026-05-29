@@ -9,14 +9,12 @@
     <field name="inherit_id" ref="crm.crm_lead_view_form"/>
     <field name="arch" type="xml">
 
-      <!-- Smart buttons (top-right pill area) -->
+      <!-- Smart buttons (top-right pill area) — no invisible here, fields not in context -->
       <div name="button_box" position="inside">
         <button name="action_open_presaleiq"
                 type="object"
                 class="oe_stat_button"
-                icon="fa-robot"
-                invisible="not presaleiq_analysis_url">
-          <!-- FIX: replaced deprecated attrs with inline invisible (Odoo 17) -->
+                icon="fa-robot">
           <div class="o_stat_info">
             <span class="o_stat_text">PresaleIQ</span>
             <span class="o_stat_value">
@@ -28,8 +26,7 @@
         <button name="action_open_live_agent_dashboard"
                 type="object"
                 class="oe_stat_button"
-                icon="fa-microphone"
-                invisible="not presaleiq_session_url">
+                icon="fa-microphone">
           <div class="o_stat_info">
             <span class="o_stat_text">Live Agent</span>
             <span class="o_stat_value">Dashboard</span>
@@ -54,12 +51,6 @@
                 string="Live Agent"
                 class="btn btn-secondary"
                 icon="fa-microphone"/>
-        <button name="action_push_to_platform_presaleiq"
-                type="object"
-                string="Push to Platform"
-                class="btn btn-secondary"
-                icon="fa-upload"
-                invisible="presaleiq_status != 'complete'"/>
       </header>
 
     </field>
@@ -72,8 +63,22 @@
     <!-- FIX: same inherit_id correction -->
     <field name="inherit_id" ref="crm.crm_lead_view_form"/>
     <field name="arch" type="xml">
-      <page name="notes" position="after">
+      <xpath expr="//notebook" position="inside">
         <page name="presaleiq" string="PresaleIQ">
+
+          <!-- Hidden fields needed for invisible modifiers in Odoo 17 -->
+          <field name="presaleiq_analysis_id"        invisible="1"/>
+          <field name="presaleiq_license_analysis_id" invisible="1"/>
+          <field name="presaleiq_session_id"          invisible="1"/>
+
+          <!-- Transcript Upload -->
+          <group string="Discovery Transcript">
+            <field name="presaleiq_transcript_file"
+                   filename="presaleiq_transcript_filename"
+                   widget="binary"
+                   help="Upload your discovery call transcript (.txt, .docx, or .pdf). Used as input for all PresaleIQ analyses."/>
+            <field name="presaleiq_transcript_filename" invisible="1"/>
+          </group>
 
           <!-- AI Analysis section -->
           <group string="AI Analysis — SOW + User Stories">
@@ -89,12 +94,6 @@
                     string="Refresh Status"
                     class="btn btn-secondary btn-sm"
                     icon="fa-refresh"/>
-            <button name="action_push_to_platform_presaleiq"
-                    type="object"
-                    string="Push to Platform"
-                    class="btn btn-primary btn-sm ms-2"
-                    icon="fa-upload"
-                    invisible="presaleiq_status != 'complete'"/>
           </div>
 
           <!-- License Sizing section -->
@@ -131,7 +130,7 @@
           </div>
 
         </page>
-      </page>
+      </xpath>
     </field>
   </record>
 

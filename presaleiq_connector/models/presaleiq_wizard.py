@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from markupsafe import Markup
 from odoo import _, fields, models
 from odoo.exceptions import UserError
 
@@ -60,12 +61,11 @@ class PresaleIQLiveAgentWizard(models.TransientModel):
         })
 
         lead.message_post(
-            body=_(
+            body=Markup(
                 '<p><strong>PresaleIQ Live Agent started</strong></p>'
-                '<p>Agent <em>%(agent)s</em> is joining the meeting.</p>'
-                '<p><a href="%(url)s" target="_blank">Open battle card dashboard &rarr;</a></p>',
-                agent=self.agent_name, url=dashboard,
-            ),
+                '<p>Agent <em>{agent}</em> is joining the meeting.</p>'
+                '<p><a href="{url}" target="_blank">Open battle card dashboard →</a></p>'
+            ).format(agent=self.agent_name, url=dashboard),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )

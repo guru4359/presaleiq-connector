@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import base64
+import io
 import json
 import logging
 import re
@@ -6,7 +8,10 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
+import xml.etree.ElementTree as ET
 
+from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -77,6 +82,17 @@ class CrmLead(models.Model):
         help='Battle card dashboard for the active/last live session.',
     )
 
+    # ── Transcript upload ─────────────────────────────────────────────────
+    presaleiq_transcript_file = fields.Binary(
+        string='Discovery Transcript',
+        attachment=True,
+        help='Upload a .txt, .docx, or .pdf discovery call transcript. '
+             'This will be used as the primary input for PresaleIQ analysis.',
+    )
+    presaleiq_transcript_filename = fields.Char(
+        string='Transcript Filename',
+    )
+
     # ── Push fields ───────────────────────────────────────────────────────
     presaleiq_push_status = fields.Char(
         string='Last Push Status',
@@ -122,7 +138,13 @@ class CrmLead(models.Model):
         return _labels.get(slug, slug.title())
 
     def _presaleiq_build_transcript(self):
-        """Build a plain-text transcript from opportunity fields + chatter."""
+        """Build a plain-text transcript from opportunity fields + chatter.
+
+        Priority order:
+          1. Dedicated transcript upload (presaleiq_transcript_file field)
+          2. Description field
+          3. Chatter messages / emails
+        """
         lines = []
         if self.name:
             lines.append(f'Opportunity: {self.name}')
@@ -134,8 +156,54 @@ class CrmLead(models.Model):
                 f'Expected Revenue: {self.expected_revenue} '
                 f'{self.company_currency.name}'
             )
+
+        # ── 1. Dedicated transcript file (highest priority) ───────────────────
+        if self.presaleiq_transcript_file:
+            try:
+                raw  = base64.b64decode(self.presaleiq_transcript_file)
+                name = (self.presaleiq_transcript_filename or '').lower()
+                if name.endswith('.docx'):
+                    text = self._extract_docx_text(raw)[:12000]
+                elif name.endswith('.pdf'):
+                    text = self._extract_pdf_text(raw)[:12000]
+                else:
+                    text = raw.decode('utf-8', errors='replace')[:12000]
+                if text:
+                    lines.append(f'\nDiscovery Transcript:\n{text}')
+                    return '\n'.join(lines)   # skip description + chatter
+            except Exception as exc:
+                _logger.warning('PresaleIQ: could not read transcript file: %s', exc)
+
         if self.description:
-            lines.append(f'\nDescription:\n{self.description}')
+            clean_desc = re.sub(r'<[^>]+>', ' ', self.description or '').strip()
+            if clean_desc:
+                lines.append(f'\nDescription:\n{clean_desc}')
+
+        # ── 2. Chatter attachments: .txt / .docx / .pdf ───────────────────────
+        attachments = self.env['ir.attachment'].search([
+            ('res_model', '=', 'crm.lead'),
+            ('res_id',    '=', self.id),
+        ])
+        for att in attachments:
+            name  = (att.name or '').lower()
+            if not any(name.endswith(ext) for ext in ('.txt', '.docx', '.pdf')):
+                continue
+            try:
+                raw = base64.b64decode(att.datas or b'')
+                if name.endswith('.txt'):
+                    text = raw.decode('utf-8', errors='replace')[:8000]
+                    lines.append(f'\nAttachment ({att.name}):\n{text}')
+                elif name.endswith('.docx'):
+                    text = self._extract_docx_text(raw)[:8000]
+                    if text:
+                        lines.append(f'\nAttachment ({att.name}):\n{text}')
+                elif name.endswith('.pdf'):
+                    text = self._extract_pdf_text(raw)[:8000]
+                    if text:
+                        lines.append(f'\nAttachment ({att.name}):\n{text}')
+            except Exception as exc:
+                _logger.warning('PresaleIQ: could not read attachment %s: %s', att.name, exc)
+
         messages = self.message_ids.filtered(
             lambda m: m.message_type in ('comment', 'email') and m.body
         )[:5]
@@ -146,6 +214,35 @@ class CrmLead(models.Model):
                 if body:
                     lines.append(body[:3000])
         return '\n'.join(lines)
+
+    @staticmethod
+    def _extract_docx_text(raw: bytes) -> str:
+        """Extract plain text from a .docx file (ZIP + XML, no external deps)."""
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                with z.open('word/document.xml') as f:
+                    tree = ET.parse(f)
+            ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+            parts = [t.text for t in tree.findall('.//w:t', ns) if t.text]
+            return ' '.join(parts)
+        except Exception:
+            return ''
+
+    @staticmethod
+    def _extract_pdf_text(raw: bytes) -> str:
+        """Extract plain text from a PDF using only the stdlib (BT/ET stream parsing)."""
+        try:
+            text = raw.decode('latin-1', errors='replace')
+            parts = []
+            for block in re.findall(r'BT(.*?)ET', text, re.DOTALL):
+                for tj in re.findall(r'\((.*?)\)\s*Tj', block):
+                    parts.append(tj)
+                for arr in re.findall(r'\[(.*?)\]\s*TJ', block):
+                    for s in re.findall(r'\((.*?)\)', arr):
+                        parts.append(s)
+            return re.sub(r'\s+', ' ', ' '.join(parts)).strip()
+        except Exception:
+            return ''
 
     @staticmethod
     def _presaleiq_http(url, api_key, payload_dict=None, method='POST', timeout=30):
@@ -177,6 +274,7 @@ class CrmLead(models.Model):
     def _presaleiq_poll_background(self, base_url, api_key, analysis_id, lead_id,
                                    field_prefix='presaleiq'):
         """Poll /api/v1/analyze/<id>/status in a daemon thread."""
+        db_name  = self.env.cr.dbname   # capture before thread runs
         poll_url = f'{base_url}/api/v1/analyze/{analysis_id}/status'
         req = urllib.request.Request(
             poll_url,
@@ -208,6 +306,12 @@ class CrmLead(models.Model):
                                 f"UPDATE crm_lead SET {status_field}=%s WHERE id=%s",
                                 ('complete', lead_id),
                             )
+                    # Auto-attach documents to the opportunity
+                    doc_prefix = ('PresaleIQ_SOW' if field_prefix == 'presaleiq'
+                                  else 'PresaleIQ_LicenseSizing')
+                    self._presaleiq_attach_documents(
+                        base_url, api_key, analysis_id, lead_id,
+                        prefix=doc_prefix, db_name=db_name)
                     return
                 elif status == 'error':
                     with self.pool.cursor() as cr:
@@ -221,6 +325,63 @@ class CrmLead(models.Model):
                     'PresaleIQ poll attempt %d failed for analysis %d: %s',
                     attempt + 1, analysis_id, exc,
                 )
+
+    def _presaleiq_attach_documents(self, base_url, api_key, analysis_id, lead_id,
+                                    prefix='PresaleIQ_SOW', db_name=None):
+        """Download PDF + XLSX from PresaleIQ and attach to the opportunity via ORM."""
+        try:
+            from odoo import SUPERUSER_ID
+            from odoo.modules.registry import Registry as OdooRegistry
+
+            formats = [
+                ('pdf',  f'{prefix}.pdf',  'application/pdf'),
+                ('xlsx', f'{prefix}.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+            ]
+            _db = db_name or (self.env.cr.dbname if hasattr(self, 'env') else None)
+            if not _db:
+                _logger.warning('PresaleIQ: cannot attach documents — db_name unknown')
+                return
+
+            _logger.info('PresaleIQ: starting document attach for analysis %d on db %s', analysis_id, _db)
+
+            for fmt, fname, mimetype in formats:
+                try:
+                    url = f'{base_url}/api/v1/analyze/{analysis_id}/download/{fmt}'
+                    _logger.info('PresaleIQ: downloading %s from %s', fmt, url)
+                    req = urllib.request.Request(
+                        url, headers={'X-API-Key': api_key}, method='GET')
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        file_bytes = resp.read()
+                    _logger.info('PresaleIQ: downloaded %s (%d bytes)', fmt, len(file_bytes))
+                    encoded = base64.b64encode(file_bytes).decode()
+
+                    registry = OdooRegistry(_db)
+                    with registry.cursor() as cr:
+                        from odoo import api as odoo_api
+                        env = odoo_api.Environment(cr, SUPERUSER_ID, {})
+                        # Remove previous version of same file
+                        env['ir.attachment'].search([
+                            ('res_model', '=', 'crm.lead'),
+                            ('res_id',    '=', lead_id),
+                            ('name',      '=', fname),
+                        ]).unlink()
+                        env['ir.attachment'].create({
+                            'name':      fname,
+                            'res_model': 'crm.lead',
+                            'res_id':    lead_id,
+                            'type':      'binary',
+                            'datas':     encoded,
+                            'mimetype':  mimetype,
+                        })
+                        cr.commit()
+                    _logger.info('PresaleIQ: attached %s to crm.lead %s', fname, lead_id)
+                except Exception as exc:
+                    _logger.warning(
+                        'PresaleIQ: could not attach %s for analysis %d: %s',
+                        fmt, analysis_id, exc,
+                    )
+        except Exception as exc:
+            _logger.warning('PresaleIQ: _presaleiq_attach_documents failed: %s', exc)
 
     # ── actions ──────────────────────────────────────────────────────────
 
@@ -252,12 +413,11 @@ class CrmLead(models.Model):
         poll_url = data.get('poll_url')
 
         self.message_post(
-            body=_(
+            body=Markup(
                 '<p><strong>PresaleIQ analysis started</strong></p>'
-                '<p>Sent to PresaleIQ for AI analysis (platform: %(platform)s).</p>'
-                '<p><a href="%(url)s" target="_blank">View analysis &rarr;</a></p>',
-                platform=platform, url=results_url,
-            ),
+                '<p>Sent to PresaleIQ for AI analysis (platform: {platform}).</p>'
+                '<p><a href="{url}" target="_blank">View analysis →</a></p>'
+            ).format(platform=platform, url=results_url),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
@@ -312,12 +472,11 @@ class CrmLead(models.Model):
         poll_url = data.get('poll_url')
 
         self.message_post(
-            body=_(
+            body=Markup(
                 '<p><strong>PresaleIQ License Sizing started</strong></p>'
-                '<p>Generating license recommendations for %(platform)s.</p>'
-                '<p><a href="%(url)s" target="_blank">View report &rarr;</a></p>',
-                platform=self._presaleiq_platform_label(), url=results_url,
-            ),
+                '<p>Generating license recommendations for {platform}.</p>'
+                '<p><a href="{url}" target="_blank">View report →</a></p>'
+            ).format(platform=self._presaleiq_platform_label(), url=results_url),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
@@ -346,16 +505,15 @@ class CrmLead(models.Model):
         """Open the Live Agent wizard to collect the meeting URL."""
         self.ensure_one()
         self._presaleiq_config()   # validate config early
-        wizard = self.env['presaleiq.live.agent.wizard'].create({
-            'lead_id': self.id,
-        })
+        # Open a blank form — lead_id is injected via context so the user
+        # only needs to fill in the meeting URL before clicking Start Agent.
         return {
             'type':      'ir.actions.act_window',
             'name':      _('Start PresaleIQ Live Agent'),
             'res_model': 'presaleiq.live.agent.wizard',
-            'res_id':    wizard.id,
             'view_mode': 'form',
             'target':    'new',
+            'context':   {'default_lead_id': self.id},
         }
 
     def action_push_to_platform_presaleiq(self):
@@ -389,20 +547,18 @@ class CrmLead(models.Model):
             'presaleiq_push_stories_count': created,
         })
 
+        error_html = (
+            Markup('<p style="color:red">{}</p>').format(
+                Markup('<br/>').join(errors[:5])
+            ) if errors else Markup('')
+        )
         self.message_post(
-            body=_(
-                '<p><strong>PresaleIQ → %(platform)s push %(status)s</strong></p>'
-                '<p>%(created)s stories created, %(failed)s failed.</p>'
-                '%(errors)s',
-                platform=platform_label,
-                status=push_status,
-                created=created,
-                failed=failed,
-                errors=(
-                    '<p style="color:red">' + '<br/>'.join(errors[:5]) + '</p>'
-                    if errors else ''
-                ),
-            ),
+            body=Markup(
+                '<p><strong>PresaleIQ → {platform} push {status}</strong></p>'
+                '<p>{created} stories created, {failed} failed.</p>'
+                '{errors}'
+            ).format(platform=platform_label, status=push_status,
+                     created=created, failed=failed, errors=error_html),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
@@ -443,7 +599,7 @@ class CrmLead(models.Model):
         if not self.presaleiq_analysis_id:
             raise UserError(_('No analysis ID found. Run "Analyze with PresaleIQ" first.'))
 
-        base_url, api_key, _ = self._presaleiq_config()
+        base_url, api_key, _platform = self._presaleiq_config()
         data = self._presaleiq_http(
             f'{base_url}/api/v1/analyze/{self.presaleiq_analysis_id}/status',
             api_key,
@@ -460,21 +616,45 @@ class CrmLead(models.Model):
             vals['presaleiq_story_count'] = story_count
         self.sudo().write(vals)
 
+        # If complete, ensure documents are attached (handles cases where the
+        # background thread ran before the server-side download endpoint was
+        # fixed, or where attachment failed for any reason).
+        doc_msg = ''
+        if status == 'complete':
+            existing = self.env['ir.attachment'].search_count([
+                ('res_model', '=', 'crm.lead'),
+                ('res_id',    '=', self.id),
+                ('name',      'like', 'PresaleIQ_'),
+            ])
+            if not existing:
+                db_name = self.env.cr.dbname
+                import threading as _thr
+                _thr.Thread(
+                    target=self._presaleiq_attach_documents,
+                    args=(base_url, api_key,
+                          self.presaleiq_analysis_id, self.id,
+                          'PresaleIQ_SOW', db_name),
+                    daemon=True,
+                ).start()
+                doc_msg = ' — downloading documents…'
+
         return {
             'type':   'ir.actions.client',
             'tag':    'display_notification',
             'params': {
                 'title':   _('PresaleIQ Status'),
                 'message': _(
-                    'Status: %(status)s%(stories)s',
+                    'Status: %(status)s%(stories)s%(docs)s',
                     status=status,
                     stories=(
                         f' — {story_count} user stories generated'
                         if story_count else ''
                     ),
+                    docs=doc_msg,
                 ),
                 'type':   'success' if status == 'complete' else 'info',
                 'sticky': False,
+                'next':   {'type': 'ir.actions.client', 'tag': 'reload'},
             },
         }
 
