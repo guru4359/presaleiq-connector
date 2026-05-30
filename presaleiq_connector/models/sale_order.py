@@ -123,7 +123,7 @@ class PresaleIQSaleOrder(models.Model):
     _presaleiq_attach_documents              = PresaleIQMixin._presaleiq_attach_documents
     _extract_docx_text                       = staticmethod(PresaleIQMixin._extract_docx_text)
     _extract_pdf_text                        = staticmethod(PresaleIQMixin._extract_pdf_text)
-    _presaleiq_extract_docx_text             = staticmethod(PresaleIQMixin._presaleiq_extract_docx_text)
+    _presaleiq_extract_docx_text             = PresaleIQMixin._presaleiq_extract_docx_text
     _presaleiq_find_questionnaire_attachment = PresaleIQMixin._presaleiq_find_questionnaire_attachment
     action_analyze_with_presaleiq            = PresaleIQMixin.action_analyze_with_presaleiq
     action_get_questionnaire                 = PresaleIQMixin.action_get_questionnaire
