@@ -131,6 +131,7 @@ class PresaleIQSaleOrder(models.Model):
     action_push_to_platform_presaleiq        = PresaleIQMixin.action_push_to_platform_presaleiq
     action_open_presaleiq                    = PresaleIQMixin.action_open_presaleiq
     action_refresh_presaleiq_status          = PresaleIQMixin.action_refresh_presaleiq_status
+    action_refresh_license_sizing_status     = PresaleIQMixin.action_refresh_license_sizing_status
 
     # ── Sales-specific method ─────────────────────────────────────────────
 

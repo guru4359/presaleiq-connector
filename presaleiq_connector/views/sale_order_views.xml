@@ -100,8 +100,16 @@
                       class="btn btn-primary btn-sm ms-2"
                       icon="fa-calculator"
                       title="Run licence sizing from attached filled questionnaire, or open the web form"/>
+              <button name="action_refresh_license_sizing_status"
+                      type="object"
+                      string="Refresh Sizing Status"
+                      class="btn btn-secondary btn-sm ms-2"
+                      icon="fa-refresh"
+                      invisible="presaleiq_license_analysis_id == 0"
+                      title="Check latest licence sizing status and download documents if ready"/>
             </div>
-            <div colspan="2" class="text-muted small mb-1">
+            <div colspan="2" class="text-muted small mb-1"
+                 invisible="presaleiq_license_analysis_id != 0">
               No filled questionnaire attached yet — click <strong>Get Questionnaire</strong>
               to download the blank form, send to your customer, then attach their completed
               version here and click <strong>Run License Sizing</strong>.

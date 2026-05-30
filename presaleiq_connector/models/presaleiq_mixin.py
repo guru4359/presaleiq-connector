@@ -632,6 +632,66 @@ class PresaleIQMixin:
             },
         }
 
+    def action_refresh_license_sizing_status(self):
+        """Manually refresh the licence sizing status from PresaleIQ."""
+        self.ensure_one()
+        if not self.presaleiq_license_analysis_id:
+            raise UserError(_('No licence sizing analysis found. Click "Run License Sizing" first.'))
+
+        base_url, api_key, _platform = self._presaleiq_config()
+        data = self._presaleiq_http(
+            f'{base_url}/api/v1/analyze/{self.presaleiq_license_analysis_id}/status',
+            api_key,
+            payload_dict=None,
+            method='GET',
+        )
+
+        status = data.get('status', '')
+        error  = data.get('error', '')
+
+        self.sudo().write({'presaleiq_license_status': status})
+
+        # If complete, ensure documents are attached
+        doc_msg = ''
+        if status == 'complete':
+            existing = self.env['ir.attachment'].search_count([
+                ('res_model', '=', self._name),
+                ('res_id',    '=', self.id),
+                ('name',      'like', 'PresaleIQ_LicenseSizing'),
+            ])
+            if not existing:
+                db_name    = self.env.cr.dbname
+                model_name = self._name
+                import threading as _thr
+                _thr.Thread(
+                    target=self._presaleiq_attach_documents,
+                    args=(base_url, api_key,
+                          self.presaleiq_license_analysis_id, self.id,
+                          'PresaleIQ_LicenseSizing', db_name),
+                    kwargs={'model_name': model_name},
+                    daemon=True,
+                ).start()
+                doc_msg = ' — downloading documents…'
+
+        notif_type = 'success' if status == 'complete' else ('danger' if status == 'error' else 'info')
+        msg = _('Status: %(status)s%(docs)s', status=status, docs=doc_msg)
+        if status == 'error' and error:
+            msg = _('Error: %(error)s', error=error)
+
+        action = {
+            'type': 'ir.actions.client',
+            'tag':  'display_notification',
+            'params': {
+                'title':   _('Licence Sizing Status'),
+                'message': msg,
+                'type':    notif_type,
+                'sticky':  status == 'error',
+            },
+        }
+        if status == 'complete':
+            action['params']['next'] = {'type': 'ir.actions.client', 'tag': 'reload'}
+        return action
+
     def action_open_presaleiq(self):
         """Open the latest PresaleIQ analysis in a new tab."""
         self.ensure_one()
