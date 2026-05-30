@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PresaleIQ — AI Pre-Sales Agent',
-    'version': '17.0.1.19.0',
+    'version': '17.0.1.20.0',
     'category': 'Sales/CRM',
     'summary': 'Turn discovery calls into SOWs, User Stories & Effort Estimates — automatically.',
     'description': """
@@ -36,11 +36,11 @@ so one account covers your entire team.
 5. Click **"License Sizing"** to get platform license recommendations.
 6. Click **"Live Agent"** to send an AI bot to your live discovery call.
 
-**Features (v1.8)**
+**Features (v1.20)**
 
 - One-click SOW + User Stories analysis from the Opportunity form
 - SOW PDF + XLSX automatically attached to the Opportunity on completion
-- License Sizing PDF + XLSX automatically attached on completion
+- License Sizing: Get Questionnaire → customer fills it in → Run Sizing (PDF + XLSX auto-attached)
 - Results visible directly in the CRM chatter — PDF and Excel download links
   appear as a PresaleIQ notification in the Opportunity activity thread
 - Live Agent: AI bot joins your Zoom/Teams/Meet call and provides real-time
@@ -48,8 +48,9 @@ so one account covers your entire team.
 - Results and status tracked on the Opportunity record
 - Background polling — story count and documents auto-update when complete
 - Refresh Status re-triggers document download if attachment was missed
-- Supports ServiceNow, Salesforce, Atlassian (Jira), Zendesk, BMC Helix,
-  Ivanti, and ManageEngine
+- Supports 12 platforms: ServiceNow, Salesforce, Atlassian (Jira), Zendesk,
+  BMC Helix, BMC Control-M, Ivanti, ManageEngine, SailPoint, CyberArk,
+  Saviynt, and Microsoft (Entra / M365)
 - Works with Odoo Online, Odoo.sh, and on-premise
 
 **About PresaleIQ**

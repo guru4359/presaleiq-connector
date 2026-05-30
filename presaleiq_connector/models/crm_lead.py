@@ -85,11 +85,16 @@ class PresaleIQCrmLead(models.Model):
         selection=[
             ('servicenow',   'ServiceNow'),
             ('bmc_helix',    'BMC Helix'),
+            ('bmc_controlm', 'BMC Control-M'),
             ('salesforce',   'Salesforce'),
             ('atlassian',    'Atlassian (Jira)'),
             ('ivanti',       'Ivanti'),
             ('manageengine', 'ManageEngine'),
             ('zendesk',      'Zendesk'),
+            ('sailpoint',    'SailPoint'),
+            ('cyberark',     'CyberArk'),
+            ('saviynt',      'Saviynt'),
+            ('microsoft',    'Microsoft (Entra / M365)'),
         ],
         string='Platform',
         help='Platform being sold for this opportunity. '
@@ -113,12 +118,12 @@ class PresaleIQCrmLead(models.Model):
     # ── Inject all shared methods from PresaleIQMixin ─────────────────────
     _presaleiq_config                        = PresaleIQMixin._presaleiq_config
     _presaleiq_platform_label                = PresaleIQMixin._presaleiq_platform_label
-    _presaleiq_http                          = PresaleIQMixin._presaleiq_http
+    _presaleiq_http                          = staticmethod(PresaleIQMixin._presaleiq_http)
     _presaleiq_poll_background               = PresaleIQMixin._presaleiq_poll_background
     _presaleiq_attach_documents              = PresaleIQMixin._presaleiq_attach_documents
-    _extract_docx_text                       = PresaleIQMixin._extract_docx_text
-    _extract_pdf_text                        = PresaleIQMixin._extract_pdf_text
-    _presaleiq_extract_docx_text             = PresaleIQMixin._presaleiq_extract_docx_text
+    _extract_docx_text                       = staticmethod(PresaleIQMixin._extract_docx_text)
+    _extract_pdf_text                        = staticmethod(PresaleIQMixin._extract_pdf_text)
+    _presaleiq_extract_docx_text             = staticmethod(PresaleIQMixin._presaleiq_extract_docx_text)
     _presaleiq_find_questionnaire_attachment = PresaleIQMixin._presaleiq_find_questionnaire_attachment
     action_analyze_with_presaleiq            = PresaleIQMixin.action_analyze_with_presaleiq
     action_get_questionnaire                 = PresaleIQMixin.action_get_questionnaire

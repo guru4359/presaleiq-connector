@@ -64,8 +64,13 @@ class PresaleIQMixin:
             'atlassian':    'Atlassian (Jira)',
             'zendesk':      'Zendesk',
             'bmc_helix':    'BMC Helix',
+            'bmc_controlm': 'BMC Control-M',
             'ivanti':       'Ivanti',
             'manageengine': 'ManageEngine',
+            'sailpoint':    'SailPoint',
+            'cyberark':     'CyberArk',
+            'saviynt':      'Saviynt',
+            'microsoft':    'Microsoft (Entra / M365)',
         }
         _, _, slug = self._presaleiq_config()
         return _labels.get(slug, slug.title())
@@ -398,6 +403,7 @@ class PresaleIQMixin:
             url,
             headers={
                 'Authorization': f'Bearer {api_key}',
+                'X-Platform':    platform,
                 'Accept': (
                     'application/vnd.openxmlformats-officedocument'
                     '.wordprocessingml.document'
@@ -407,6 +413,16 @@ class PresaleIQMixin:
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 docx_bytes = resp.read()
+        except urllib.error.HTTPError as e:
+            body = ''
+            try:
+                body = e.read().decode('utf-8', errors='replace')[:500]
+            except Exception:
+                pass
+            raise UserError(_(
+                'Failed to download questionnaire: %(e)s — %(body)s',
+                e=str(e), body=body,
+            ))
         except Exception as e:
             raise UserError(_('Failed to download questionnaire: %(e)s', e=str(e)))
 
@@ -420,10 +436,11 @@ class PresaleIQMixin:
             ('name',      '=', filename),
         ]).unlink()
 
-        self.env['ir.attachment'].create({
+        att = self.env['ir.attachment'].create({
             'name':      filename,
             'res_model': self._name,
             'res_id':    self.id,
+            'type':      'binary',
             'datas':     base64.b64encode(docx_bytes).decode(),
             'mimetype': (
                 'application/vnd.openxmlformats-officedocument'
@@ -433,9 +450,9 @@ class PresaleIQMixin:
 
         self.message_post(
             body=Markup(
-                '<p><strong>Licence Sizing Questionnaire attached</strong></p>'
-                '<p>Download <strong>{filename}</strong> from the Attachments area, '
-                'send it to your customer, and ask them to fill it in and return it.</p>'
+                '<p><strong>Licence Sizing Questionnaire ready</strong></p>'
+                '<p>Downloading <strong>{filename}</strong> now. '
+                'Send it to your customer, ask them to fill it in and return it.</p>'
                 '<p>Once you have the completed questionnaire, attach it here '
                 'and click <strong>License Sizing</strong>.</p>'
             ).format(filename=filename),
@@ -443,20 +460,16 @@ class PresaleIQMixin:
             subtype_xmlid='mail.mt_comment',
         )
 
+        # Return a direct download action — this triggers the browser to
+        # download the DOCX immediately via the Odoo web/content route,
+        # using the user's existing authenticated session.  This is the
+        # standard Odoo pattern used by all report/export actions and
+        # avoids the access-token issues that arise when the user manually
+        # clicks the file in the Attachments widget.
         return {
-            'type': 'ir.actions.client',
-            'tag':  'display_notification',
-            'params': {
-                'title':   _('Questionnaire Ready'),
-                'message': _(
-                    'Blank questionnaire for %(p)s attached. '
-                    'Download it from Attachments, send to your customer, '
-                    'then attach their completed version here and click License Sizing.',
-                    p=platform_label,
-                ),
-                'type':   'success',
-                'sticky': True,
-            },
+            'type':   'ir.actions.act_url',
+            'url':    f'/web/content/{att.id}?download=true',
+            'target': 'new',
         }
 
     def action_license_sizing_presaleiq(self):
