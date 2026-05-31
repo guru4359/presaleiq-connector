@@ -26,6 +26,10 @@
                      help="Automatically send every new Opportunity to PresaleIQ when it is created.">
               <field name="presaleiq_auto_push"/>
             </setting>
+            <setting string="Share install info with PresaleIQ"
+                     help="Optional, off by default. When enabled, your company name, admin email and Odoo URL are sent to your PresaleIQ instance on save so support can identify your account. No install data is sent unless you turn this on.">
+              <field name="presaleiq_share_install_info"/>
+            </setting>
           </block>
         </app>
       </xpath>

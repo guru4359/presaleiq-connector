@@ -119,7 +119,6 @@ class PresaleIQSaleOrder(models.Model):
     _presaleiq_config                        = PresaleIQMixin._presaleiq_config
     _presaleiq_platform_label                = PresaleIQMixin._presaleiq_platform_label
     _presaleiq_http                          = staticmethod(PresaleIQMixin._presaleiq_http)
-    _presaleiq_poll_background               = PresaleIQMixin._presaleiq_poll_background
     _presaleiq_attach_documents              = PresaleIQMixin._presaleiq_attach_documents
     _extract_docx_text                       = staticmethod(PresaleIQMixin._extract_docx_text)
     _extract_pdf_text                        = staticmethod(PresaleIQMixin._extract_pdf_text)

@@ -10,7 +10,7 @@ import io
 import json
 import logging
 import re
-import threading
+import zlib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -22,9 +22,6 @@ from odoo import _, fields
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
-
-_POLL_INTERVAL = 30
-_POLL_MAX_TRIES = 20
 
 
 class PresaleIQMixin:
@@ -100,164 +97,83 @@ class PresaleIQMixin:
         except Exception as e:
             raise UserError(_('Could not reach PresaleIQ: %(err)s', err=str(e)))
 
-    # ── background polling ────────────────────────────────────────────────
+    # ── document attachment ──────────────────────────────────────────────
 
-    def _presaleiq_poll_background(self, base_url, api_key, analysis_id, lead_id,
-                                   field_prefix='presaleiq'):
-        """Poll /api/v1/analyze/<id>/status in a daemon thread."""
-        db_name    = self.env.cr.dbname   # capture before thread runs
-        model_name = self._name           # capture before thread runs
-        table_name = model_name.replace('.', '_')
-        poll_url   = f'{base_url}/api/v1/analyze/{analysis_id}/status'
-        req = urllib.request.Request(
-            poll_url,
-            headers={'X-API-Key': api_key},
-            method='GET',
-        )
-        status_field = f'{field_prefix}_status'
-        count_field  = 'presaleiq_story_count' if field_prefix == 'presaleiq' else None
+    def _presaleiq_attach_documents(self, base_url, api_key, analysis_id,
+                                    prefix='PresaleIQ_SOW'):
+        """Download PDF + XLSX from PresaleIQ and post them as a chatter message.
 
-        for attempt in range(_POLL_MAX_TRIES):
-            import time as _time
-            _time.sleep(_POLL_INTERVAL)
+        Runs synchronously through the ORM on the current record (self), inside
+        the caller's transaction — whether that is a scheduled action (ir.cron)
+        or a button handler. No background threads, no manual cursors: the
+        ir.cron job owns polling/attachment, which is safe across Odoo Online,
+        Odoo.sh and on-premise workers.
+        """
+        self.ensure_one()
+        Attachment = self.env['ir.attachment'].sudo()
+        formats = [
+            ('pdf',  f'{prefix}.pdf',  'application/pdf'),
+            ('xlsx', f'{prefix}.xlsx',
+             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+        ]
+
+        attachment_ids = []
+        for fmt, fname, mimetype in formats:
             try:
-                with urllib.request.urlopen(req, timeout=20) as resp:
-                    data = json.loads(resp.read().decode())
-                status = data.get('status', '')
-                if status == 'complete':
-                    summary = data.get('summary', {})
-                    story_count = int(summary.get('story_count') or 0)
-                    with self.pool.cursor() as cr:
-                        if count_field and story_count:
-                            cr.execute(
-                                f"UPDATE {table_name} SET {status_field}=%s, "
-                                f"{count_field}=%s WHERE id=%s",
-                                ('complete', story_count, lead_id),
-                            )
-                        else:
-                            cr.execute(
-                                f"UPDATE {table_name} SET {status_field}=%s WHERE id=%s",
-                                ('complete', lead_id),
-                            )
-                    # Auto-attach documents to the record
-                    doc_prefix = ('PresaleIQ_SOW' if field_prefix == 'presaleiq'
-                                  else 'PresaleIQ_LicenseSizing')
-                    self._presaleiq_attach_documents(
-                        base_url, api_key, analysis_id, lead_id,
-                        prefix=doc_prefix, db_name=db_name,
-                        model_name=model_name)
-                    return
-                elif status == 'error':
-                    with self.pool.cursor() as cr:
-                        cr.execute(
-                            f"UPDATE {table_name} SET {status_field}=%s WHERE id=%s",
-                            ('error', lead_id),
-                        )
-                    return
+                url = f'{base_url}/api/v1/analyze/{analysis_id}/download/{fmt}'
+                req = urllib.request.Request(
+                    url, headers={'X-API-Key': api_key}, method='GET')
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    file_bytes = resp.read()
+                encoded = base64.b64encode(file_bytes).decode()
+
+                # Replace any previous version of the same file
+                Attachment.search([
+                    ('res_model', '=', self._name),
+                    ('res_id',    '=', self.id),
+                    ('name',      '=', fname),
+                ]).unlink()
+                att = Attachment.create({
+                    'name':      fname,
+                    'res_model': self._name,
+                    'res_id':    self.id,
+                    'type':      'binary',
+                    'datas':     encoded,
+                    'mimetype':  mimetype,
+                })
+                attachment_ids.append(att.id)
+                _logger.info('PresaleIQ: attached %s to %s %s',
+                             fname, self._name, self.id)
             except Exception as exc:
-                _logger.debug(
-                    'PresaleIQ poll attempt %d failed for analysis %d: %s',
-                    attempt + 1, analysis_id, exc,
+                _logger.warning(
+                    'PresaleIQ: could not attach %s for analysis %s: %s',
+                    fmt, analysis_id, exc,
                 )
 
-    def _presaleiq_attach_documents(self, base_url, api_key, analysis_id, lead_id,
-                                    prefix='PresaleIQ_SOW', db_name=None,
-                                    model_name=None):
-        """Download PDF + XLSX from PresaleIQ and post as chatter message on the record."""
-        model_name = model_name or self._name
-        try:
-            from odoo import SUPERUSER_ID
-            from odoo.modules.registry import Registry as OdooRegistry
-
-            formats = [
-                ('pdf',  f'{prefix}.pdf',  'application/pdf'),
-                ('xlsx', f'{prefix}.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
-            ]
-            _db = db_name or (self.env.cr.dbname if hasattr(self, 'env') else None)
-            if not _db:
-                _logger.warning('PresaleIQ: cannot attach documents — db_name unknown')
-                return
-
-            _logger.info('PresaleIQ: starting document attach for analysis %d on db %s', analysis_id, _db)
-
-            attachment_ids = []
-            registry = OdooRegistry(_db)
-
-            for fmt, fname, mimetype in formats:
-                try:
-                    url = f'{base_url}/api/v1/analyze/{analysis_id}/download/{fmt}'
-                    _logger.info('PresaleIQ: downloading %s from %s', fmt, url)
-                    req = urllib.request.Request(
-                        url, headers={'X-API-Key': api_key}, method='GET')
-                    with urllib.request.urlopen(req, timeout=60) as resp:
-                        file_bytes = resp.read()
-                    _logger.info('PresaleIQ: downloaded %s (%d bytes)', fmt, len(file_bytes))
-                    encoded = base64.b64encode(file_bytes).decode()
-
-                    with registry.cursor() as cr:
-                        from odoo import api as odoo_api
-                        env = odoo_api.Environment(cr, SUPERUSER_ID, {})
-                        # Remove previous version of same file
-                        env['ir.attachment'].search([
-                            ('res_model', '=', model_name),
-                            ('res_id',    '=', lead_id),
-                            ('name',      '=', fname),
-                        ]).unlink()
-                        att = env['ir.attachment'].create({
-                            'name':      fname,
-                            'res_model': model_name,
-                            'res_id':    lead_id,
-                            'type':      'binary',
-                            'datas':     encoded,
-                            'mimetype':  mimetype,
-                        })
-                        attachment_ids.append(att.id)
-                        cr.commit()
-                    _logger.info('PresaleIQ: attached %s to %s %s', fname, model_name, lead_id)
-                except Exception as exc:
-                    _logger.warning(
-                        'PresaleIQ: could not attach %s for analysis %d: %s',
-                        fmt, analysis_id, exc,
-                    )
-
-            # Post a chatter message with the attachments so they appear visibly
-            # in the PresaleIQ conversation thread (not just buried in Internal Notes).
-            if attachment_ids:
-                try:
-                    doc_type = 'License Sizing' if 'LicenseSizing' in prefix else 'SOW + User Stories'
-                    results_url = f'{base_url}/results/{analysis_id}'
-                    with registry.cursor() as cr:
-                        from odoo import api as odoo_api
-                        env = odoo_api.Environment(cr, SUPERUSER_ID, {})
-                        record = env[model_name].browse(lead_id)
-                        record.message_post(
-                            body=Markup(
-                                '<p><img src="/web/static/img/favicon.ico" '
-                                'style="width:16px;height:16px;margin-right:6px;vertical-align:middle;"/>'
-                                '<strong>PresaleIQ — {doc_type} ready</strong></p>'
-                                '<p>Analysis #{analysis_id} is complete — '
-                                '<strong>{doc_type}</strong> documents attached below (PDF + Excel).</p>'
-                                '<p><a href="{url}" target="_blank">'
-                                '📊 View full results on presaleiq.ai →</a></p>'
-                            ).format(
-                                doc_type=doc_type,
-                                analysis_id=analysis_id,
-                                url=results_url,
-                            ),
-                            attachment_ids=attachment_ids,
-                            message_type='comment',
-                            subtype_xmlid='mail.mt_comment',
-                        )
-                        cr.commit()
-                    _logger.info(
-                        'PresaleIQ: posted chatter message with %d attachments for analysis %d',
-                        len(attachment_ids), analysis_id,
-                    )
-                except Exception as exc:
-                    _logger.warning('PresaleIQ: could not post chatter message: %s', exc)
-
-        except Exception as exc:
-            _logger.warning('PresaleIQ: _presaleiq_attach_documents failed: %s', exc)
+        if attachment_ids:
+            doc_type = ('License Sizing' if 'LicenseSizing' in prefix
+                        else 'SOW + User Stories')
+            results_url = f'{base_url}/results/{analysis_id}'
+            try:
+                self.message_post(
+                    body=Markup(
+                        '<p><strong>PresaleIQ — {doc_type} ready</strong></p>'
+                        '<p>Analysis #{analysis_id} is complete — '
+                        '<strong>{doc_type}</strong> documents attached below '
+                        '(PDF + Excel).</p>'
+                        '<p><a href="{url}" target="_blank">'
+                        'View full results on presaleiq.ai →</a></p>'
+                    ).format(
+                        doc_type=doc_type,
+                        analysis_id=analysis_id,
+                        url=results_url,
+                    ),
+                    attachment_ids=attachment_ids,
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_comment',
+                )
+            except Exception as exc:
+                _logger.warning('PresaleIQ: could not post chatter message: %s', exc)
 
     @staticmethod
     def _extract_docx_text(raw: bytes) -> str:
@@ -274,17 +190,41 @@ class PresaleIQMixin:
 
     @staticmethod
     def _extract_pdf_text(raw: bytes) -> str:
-        """Extract plain text from a PDF using only the stdlib (BT/ET stream parsing)."""
+        """Extract plain text from a PDF using only the stdlib.
+
+        Most real-world PDFs store their content in FlateDecode-compressed
+        streams, so a naive scan of the raw bytes finds nothing. This first
+        inflates every ``stream … endstream`` block with zlib, then parses the
+        PDF text operators (Tj / TJ inside BT … ET) across both the inflated
+        streams and any uncompressed content.
+        """
         try:
-            text = raw.decode('latin-1', errors='replace')
+            # 1. Collect candidate content: inflated streams + the raw bytes
+            #    (raw covers the rare uncompressed-content PDF).
+            chunks = []
+            for m in re.finditer(rb'stream\r?\n(.*?)\r?\nendstream', raw, re.DOTALL):
+                blob = m.group(1)
+                try:
+                    chunks.append(zlib.decompress(blob))
+                except Exception:
+                    # Not a zlib stream (image, font, already-plain) — skip.
+                    continue
+            chunks.append(raw)
+
             parts = []
-            for block in re.findall(r'BT(.*?)ET', text, re.DOTALL):
-                for tj in re.findall(r'\((.*?)\)\s*Tj', block):
-                    parts.append(tj)
-                for arr in re.findall(r'\[(.*?)\]\s*TJ', block):
-                    for s in re.findall(r'\((.*?)\)', arr):
-                        parts.append(s)
-            return re.sub(r'\s+', ' ', ' '.join(parts)).strip()
+            for chunk in chunks:
+                text = chunk.decode('latin-1', errors='replace')
+                for block in re.findall(r'BT(.*?)ET', text, re.DOTALL):
+                    for tj in re.findall(r'\((?:\\.|[^\\)])*\)\s*Tj', block):
+                        parts.append(re.sub(r'^\(|\)\s*Tj$', '', tj))
+                    for arr in re.findall(r'\[(.*?)\]\s*TJ', block, re.DOTALL):
+                        for s in re.findall(r'\((?:\\.|[^\\)])*\)', arr):
+                            parts.append(s[1:-1])
+            # Unescape the common PDF string escapes.
+            out = ' '.join(parts)
+            out = (out.replace('\\(', '(').replace('\\)', ')')
+                      .replace('\\\\', '\\'))
+            return re.sub(r'\s+', ' ', out).strip()
         except Exception:
             return ''
 
@@ -356,7 +296,6 @@ class PresaleIQMixin:
             data.get('results_url')
             or (f'{base_url}/results/{analysis_id}' if analysis_id else base_url)
         )
-        poll_url = data.get('poll_url')
 
         self.message_post(
             body=Markup(
@@ -375,13 +314,9 @@ class PresaleIQMixin:
             'presaleiq_status':        'pending',
         })
 
-        if analysis_id and poll_url:
-            t = threading.Thread(
-                target=self._presaleiq_poll_background,
-                args=(base_url, api_key, analysis_id, self.id, 'presaleiq'),
-                daemon=True,
-            )
-            t.start()
+        # Status + documents are picked up automatically by the
+        # "PresaleIQ: Auto-poll pending analyses" scheduled action (every 2 min);
+        # the user can also click "Refresh Status" to pull immediately.
 
         return {
             'type':   'ir.actions.act_url',
@@ -517,7 +452,6 @@ class PresaleIQMixin:
                 data.get('results_url')
                 or (f'{base_url}/results/{analysis_id}' if analysis_id else base_url)
             )
-            poll_url = data.get('poll_url')
 
             self.message_post(
                 body=Markup(
@@ -540,12 +474,8 @@ class PresaleIQMixin:
                 'presaleiq_license_status':      'pending',
             })
 
-            if analysis_id and poll_url:
-                threading.Thread(
-                    target=self._presaleiq_poll_background,
-                    args=(base_url, api_key, analysis_id, self.id, 'presaleiq_license'),
-                    daemon=True,
-                ).start()
+            # The auto-poll scheduled action attaches the License Sizing PDF +
+            # XLSX when complete; "Refresh" pulls immediately on demand.
 
             return {
                 'type':   'ir.actions.act_url',
@@ -660,18 +590,12 @@ class PresaleIQMixin:
                 ('name',      'like', 'PresaleIQ_LicenseSizing'),
             ])
             if not existing:
-                db_name    = self.env.cr.dbname
-                model_name = self._name
-                import threading as _thr
-                _thr.Thread(
-                    target=self._presaleiq_attach_documents,
-                    args=(base_url, api_key,
-                          self.presaleiq_license_analysis_id, self.id,
-                          'PresaleIQ_LicenseSizing', db_name),
-                    kwargs={'model_name': model_name},
-                    daemon=True,
-                ).start()
-                doc_msg = ' — downloading documents…'
+                self._presaleiq_attach_documents(
+                    base_url, api_key,
+                    self.presaleiq_license_analysis_id,
+                    'PresaleIQ_LicenseSizing',
+                )
+                doc_msg = ' — documents attached'
 
         notif_type = 'success' if status == 'complete' else ('danger' if status == 'error' else 'info')
         msg = _('Status: %(status)s%(docs)s', status=status, docs=doc_msg)
@@ -701,8 +625,6 @@ class PresaleIQMixin:
 
         Call via @api.model cron_presaleiq_auto_poll() in each concrete model.
         """
-        import threading as _thr
-
         def _get_config(rec):
             try:
                 return rec._presaleiq_config()
@@ -714,6 +636,7 @@ class PresaleIQMixin:
 
             Uses exact name match (not 'like') so questionnaire files such as
             PresaleIQ_LicenseSizing_Questionnaire_*.docx are never touched.
+            Runs synchronously inside the cron transaction — no threads.
             """
             for ext in ('.pdf', '.xlsx'):
                 stale = rec.env['ir.attachment'].sudo().search([
@@ -723,14 +646,7 @@ class PresaleIQMixin:
                 ])
                 if stale:
                     stale.unlink()
-            db    = rec.env.cr.dbname
-            model = rec._name
-            _thr.Thread(
-                target=rec._presaleiq_attach_documents,
-                args=(base_url, api_key, analysis_id, rec.id, doc_prefix, db),
-                kwargs={'model_name': model},
-                daemon=True,
-            ).start()
+            rec._presaleiq_attach_documents(base_url, api_key, analysis_id, doc_prefix)
 
         # ── 1. Main analysis (SOW / User Stories) ─────────────────────────
         pending_analysis = self.search([
@@ -823,28 +739,19 @@ class PresaleIQMixin:
         self.sudo().write(vals)
 
         # If complete, ensure documents are attached (handles cases where the
-        # background thread ran before the server-side download endpoint was
-        # fixed, or where attachment failed for any reason).
+        # scheduled action has not run yet, or attachment failed for any reason).
         doc_msg = ''
         if status == 'complete':
             existing = self.env['ir.attachment'].search_count([
                 ('res_model', '=', self._name),
                 ('res_id',    '=', self.id),
-                ('name',      'like', 'PresaleIQ_'),
+                ('name',      'like', 'PresaleIQ_SOW'),
             ])
             if not existing:
-                db_name    = self.env.cr.dbname
-                model_name = self._name
-                import threading as _thr
-                _thr.Thread(
-                    target=self._presaleiq_attach_documents,
-                    args=(base_url, api_key,
-                          self.presaleiq_analysis_id, self.id,
-                          'PresaleIQ_SOW', db_name),
-                    kwargs={'model_name': model_name},
-                    daemon=True,
-                ).start()
-                doc_msg = ' — downloading documents…'
+                self._presaleiq_attach_documents(
+                    base_url, api_key, self.presaleiq_analysis_id, 'PresaleIQ_SOW',
+                )
+                doc_msg = ' — documents attached'
 
         return {
             'type':   'ir.actions.client',

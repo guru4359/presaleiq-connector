@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PresaleIQ — AI Pre-Sales Agent',
-    'version': '17.0.1.24.0',
+    'version': '17.0.1.25.0',
     'category': 'Sales/CRM',
     'summary': 'Turn discovery calls into SOWs, User Stories & Effort Estimates — automatically.',
     'description': """
@@ -36,7 +36,7 @@ so one account covers your entire team.
 5. Click **"License Sizing"** to get platform license recommendations.
 6. Click **"Live Agent"** to send an AI bot to your live discovery call.
 
-**Features (v1.20)**
+**Features**
 
 - One-click SOW + User Stories analysis from the Opportunity form
 - SOW PDF + XLSX automatically attached to the Opportunity on completion
@@ -46,12 +46,21 @@ so one account covers your entire team.
 - Live Agent: AI bot joins your Zoom/Teams/Meet call and provides real-time
   battle cards, objection handling, and competitive intelligence
 - Results and status tracked on the Opportunity record
-- Background polling — story count and documents auto-update when complete
+- Automatic background polling via a scheduled action — story count and
+  documents update on their own once analysis completes
 - Refresh Status re-triggers document download if attachment was missed
 - Supports 12 platforms: ServiceNow, Salesforce, Atlassian (Jira), Zendesk,
   BMC Helix, BMC Control-M, Ivanti, ManageEngine, SailPoint, CyberArk,
   Saviynt, and Microsoft (Entra / M365)
 - Works with Odoo Online, Odoo.sh, and on-premise
+
+**Data & privacy**
+
+Your API key, company name, admin email and Odoo URL are sent to your
+configured PresaleIQ instance only when you enable "Share install info with
+PresaleIQ" in Settings → PresaleIQ (off by default). Discovery transcripts and
+opportunity content are sent to your PresaleIQ instance only when you explicitly
+click Analyze, License Sizing, or Live Agent. No data leaves Odoo otherwise.
 
 **About PresaleIQ**
 
@@ -63,9 +72,7 @@ Questions? Email support@presaleiq.ai
     """,
     'author': 'PresaleIQ.ai',
     'website': 'https://presaleiq.ai',
-    'license': 'OPL-1',
-    'price': 0.00,
-    'currency': 'USD',
+    'license': 'LGPL-3',
     'depends': ['crm', 'mail', 'sale'],
     'data': [
         'security/ir.model.access.csv',

@@ -119,7 +119,6 @@ class PresaleIQCrmLead(models.Model):
     _presaleiq_config                        = PresaleIQMixin._presaleiq_config
     _presaleiq_platform_label                = PresaleIQMixin._presaleiq_platform_label
     _presaleiq_http                          = staticmethod(PresaleIQMixin._presaleiq_http)
-    _presaleiq_poll_background               = PresaleIQMixin._presaleiq_poll_background
     _presaleiq_attach_documents              = PresaleIQMixin._presaleiq_attach_documents
     _extract_docx_text                       = staticmethod(PresaleIQMixin._extract_docx_text)
     _extract_pdf_text                        = staticmethod(PresaleIQMixin._extract_pdf_text)
@@ -293,18 +292,10 @@ class PresaleIQCrmLead(models.Model):
                 ('name',      'like', 'PresaleIQ_Meeting'),
             ])
             if not existing:
-                db_name    = self.env.cr.dbname
-                model_name = self._name
-                import threading as _thr
-                _thr.Thread(
-                    target=self._presaleiq_attach_documents,
-                    args=(base_url, api_key,
-                          analysis_id, self.id,
-                          'PresaleIQ_MeetingNotes', db_name),
-                    kwargs={'model_name': model_name},
-                    daemon=True,
-                ).start()
-                msg_body = _('Meeting notes ready — attaching PDF & Excel to this opportunity…')
+                self._presaleiq_attach_documents(
+                    base_url, api_key, analysis_id, 'PresaleIQ_MeetingNotes',
+                )
+                msg_body = _('Meeting notes ready — PDF & Excel attached to this opportunity.')
             else:
                 msg_body = _('Meeting notes already attached.')
             msg_type = 'success'

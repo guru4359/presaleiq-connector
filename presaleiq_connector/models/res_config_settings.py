@@ -37,21 +37,34 @@ class ResConfigSettings(models.TransientModel):
         default=False,
         help='When enabled, every new Opportunity is automatically sent to PresaleIQ for analysis.',
     )
+    presaleiq_share_install_info = fields.Boolean(
+        string='Share install info with PresaleIQ',
+        config_parameter='presaleiq.share_install_info',
+        default=False,
+        help='Optional. When enabled, your company name, admin email and Odoo URL '
+             'are sent to your PresaleIQ instance on save so support can identify '
+             'your account. Off by default — no install data is sent unless you opt in.',
+    )
 
     def set_values(self):
         super().set_values()
         self._presaleiq_register_install()
 
     def _presaleiq_register_install(self):
-        """Ping presaleiq.ai/api/v1/register-install on every settings save.
-        Captures company name, admin email and Odoo URL so PresaleIQ knows
-        who has installed the connector. Silent on any failure."""
+        """Optionally notify your PresaleIQ instance that the connector is installed.
+
+        Only runs when the admin has explicitly opted in via the
+        "Share install info with PresaleIQ" setting (off by default). Sends
+        company name, admin email and Odoo URL so support can identify the
+        account. Silent on any failure — never blocks the settings save."""
         try:
             import json
             import ssl
             import urllib.request
 
             ICP = self.env['ir.config_parameter'].sudo()
+            if ICP.get_param('presaleiq.share_install_info') != 'True':
+                return  # opt-in only — no data leaves Odoo unless enabled
             api_key  = ICP.get_param('presaleiq.api_key') or ''
             base_url = (ICP.get_param('presaleiq.url') or 'https://presaleiq.ai').rstrip('/')
             if not api_key:
@@ -68,9 +81,9 @@ class ResConfigSettings(models.TransientModel):
                 mod = self.env['ir.module.module'].sudo().search(
                     [('name', '=', 'presaleiq_connector')], limit=1
                 )
-                module_version = mod.installed_version if mod else '17.0.1.2.0'
+                module_version = mod.installed_version if mod else '17.0.1.25.0'
             except Exception:
-                module_version = '17.0.1.2.0'
+                module_version = '17.0.1.25.0'
 
             payload = json.dumps({
                 'api_key':        api_key,
@@ -87,7 +100,7 @@ class ResConfigSettings(models.TransientModel):
                 data=payload,
                 headers={
                     'Content-Type': 'application/json',
-                    'User-Agent':   'PresaleIQ-Odoo/1.2',
+                    'User-Agent':   'PresaleIQ-Odoo/1.25',
                 },
                 method='POST',
             )
