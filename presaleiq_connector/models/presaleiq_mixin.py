@@ -692,6 +692,99 @@ class PresaleIQMixin:
             action['params']['next'] = {'type': 'ir.actions.client', 'tag': 'reload'}
         return action
 
+    # ── Cron / background auto-poll ───────────────────────────────────────
+
+    def _cron_auto_poll(self):
+        """Shared cron logic — finds every pending PresaleIQ analysis or
+        license-sizing job on the current model, polls the VPS, updates status
+        fields, and silently attaches PDF/XLSX when complete.
+
+        Call via @api.model cron_presaleiq_auto_poll() in each concrete model.
+        """
+        import threading as _thr
+
+        def _get_config(rec):
+            try:
+                return rec._presaleiq_config()
+            except Exception:
+                return None, None, None
+
+        def _attach_if_missing(rec, base_url, api_key, analysis_id, doc_prefix):
+            existing = rec.env['ir.attachment'].search_count([
+                ('res_model', '=', rec._name),
+                ('res_id',    '=', rec.id),
+                ('name',      'like', doc_prefix),
+            ])
+            if not existing:
+                db    = rec.env.cr.dbname
+                model = rec._name
+                _thr.Thread(
+                    target=rec._presaleiq_attach_documents,
+                    args=(base_url, api_key, analysis_id, rec.id, doc_prefix, db),
+                    kwargs={'model_name': model},
+                    daemon=True,
+                ).start()
+
+        # ── 1. Main analysis (SOW / User Stories) ─────────────────────────
+        pending_analysis = self.search([
+            ('presaleiq_analysis_id', '>', 0),
+            ('presaleiq_status', 'in', ['pending', 'processing']),
+        ])
+        for rec in pending_analysis:
+            base_url, api_key, _ = _get_config(rec)
+            if not api_key:
+                continue
+            try:
+                data = rec._presaleiq_http(
+                    f'{base_url}/api/v1/analyze/{rec.presaleiq_analysis_id}/status',
+                    api_key, payload_dict=None, method='GET',
+                )
+                status      = data.get('status', '')
+                summary     = data.get('summary', {})
+                story_count = int(summary.get('story_count') or 0)
+                if not status:
+                    continue
+                vals = {'presaleiq_status': status}
+                if status == 'complete' and story_count:
+                    vals['presaleiq_story_count'] = story_count
+                rec.sudo().write(vals)
+                if status == 'complete':
+                    _attach_if_missing(rec, base_url, api_key,
+                                       rec.presaleiq_analysis_id, 'PresaleIQ_')
+            except Exception as exc:
+                _logger.warning(
+                    'PresaleIQ cron: error polling analysis #%s on %s#%s: %s',
+                    rec.presaleiq_analysis_id, rec._name, rec.id, exc,
+                )
+
+        # ── 2. License sizing ─────────────────────────────────────────────
+        pending_license = self.search([
+            ('presaleiq_license_analysis_id', '>', 0),
+            ('presaleiq_license_status', 'in', ['pending', 'processing']),
+        ])
+        for rec in pending_license:
+            base_url, api_key, _ = _get_config(rec)
+            if not api_key:
+                continue
+            try:
+                data = rec._presaleiq_http(
+                    f'{base_url}/api/v1/analyze/{rec.presaleiq_license_analysis_id}/status',
+                    api_key, payload_dict=None, method='GET',
+                )
+                status = data.get('status', '')
+                if not status:
+                    continue
+                rec.sudo().write({'presaleiq_license_status': status})
+                if status == 'complete':
+                    _attach_if_missing(rec, base_url, api_key,
+                                       rec.presaleiq_license_analysis_id,
+                                       'PresaleIQ_LicenseSizing')
+            except Exception as exc:
+                _logger.warning(
+                    'PresaleIQ cron: error polling license sizing #%s on %s#%s: %s',
+                    rec.presaleiq_license_analysis_id, rec._name, rec.id, exc,
+                )
+
     def action_open_presaleiq(self):
         """Open the latest PresaleIQ analysis in a new tab."""
         self.ensure_one()

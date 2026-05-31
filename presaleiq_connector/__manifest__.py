@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PresaleIQ — AI Pre-Sales Agent',
-    'version': '17.0.1.22.0',
+    'version': '17.0.1.23.0',
     'category': 'Sales/CRM',
     'summary': 'Turn discovery calls into SOWs, User Stories & Effort Estimates — automatically.',
     'description': """
@@ -70,6 +70,7 @@ Questions? Email support@presaleiq.ai
     'data': [
         'security/ir.model.access.csv',
         'data/res_config_settings.xml',
+        'data/ir_cron.xml',
         'views/res_config_settings_views.xml',
         'views/presaleiq_wizard_views.xml',
         'views/crm_lead_views.xml',

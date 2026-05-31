@@ -3,7 +3,7 @@ import base64
 import re
 import logging
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from .presaleiq_mixin import PresaleIQMixin
 
@@ -132,6 +132,17 @@ class PresaleIQSaleOrder(models.Model):
     action_open_presaleiq                    = PresaleIQMixin.action_open_presaleiq
     action_refresh_presaleiq_status          = PresaleIQMixin.action_refresh_presaleiq_status
     action_refresh_license_sizing_status     = PresaleIQMixin.action_refresh_license_sizing_status
+    _cron_auto_poll                          = PresaleIQMixin._cron_auto_poll
+
+    # ── Cron entry point ──────────────────────────────────────────────────
+
+    @api.model
+    def cron_presaleiq_auto_poll(self):
+        """Scheduled action: auto-poll all pending analyses + license sizings
+        on sale.order and silently attach documents when complete.
+        Runs every 2 minutes via ir.cron — no user action required.
+        """
+        self._cron_auto_poll()
 
     # ── Sales-specific method ─────────────────────────────────────────────
 
