@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<odoo noupdate="1">
+<odoo>
+<data noupdate="1">
 
   <!-- Auto-poll pending PresaleIQ analyses on CRM Opportunities every 2 min -->
   <record id="ir_cron_presaleiq_auto_poll_crm" model="ir.cron">
@@ -27,4 +28,5 @@
     <field name="active" eval="True"/>
   </record>
 
+</data>
 </odoo>

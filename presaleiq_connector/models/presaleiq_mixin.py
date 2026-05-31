@@ -709,21 +709,28 @@ class PresaleIQMixin:
             except Exception:
                 return None, None, None
 
-        def _attach_if_missing(rec, base_url, api_key, analysis_id, doc_prefix):
-            existing = rec.env['ir.attachment'].search_count([
-                ('res_model', '=', rec._name),
-                ('res_id',    '=', rec.id),
-                ('name',      'like', doc_prefix),
-            ])
-            if not existing:
-                db    = rec.env.cr.dbname
-                model = rec._name
-                _thr.Thread(
-                    target=rec._presaleiq_attach_documents,
-                    args=(base_url, api_key, analysis_id, rec.id, doc_prefix, db),
-                    kwargs={'model_name': model},
-                    daemon=True,
-                ).start()
+        def _refresh_documents(rec, base_url, api_key, analysis_id, doc_prefix):
+            """Delete stale {prefix}.pdf / {prefix}.xlsx then re-download fresh ones.
+
+            Uses exact name match (not 'like') so questionnaire files such as
+            PresaleIQ_LicenseSizing_Questionnaire_*.docx are never touched.
+            """
+            for ext in ('.pdf', '.xlsx'):
+                stale = rec.env['ir.attachment'].sudo().search([
+                    ('res_model', '=', rec._name),
+                    ('res_id',    '=', rec.id),
+                    ('name',      '=', doc_prefix + ext),
+                ])
+                if stale:
+                    stale.unlink()
+            db    = rec.env.cr.dbname
+            model = rec._name
+            _thr.Thread(
+                target=rec._presaleiq_attach_documents,
+                args=(base_url, api_key, analysis_id, rec.id, doc_prefix, db),
+                kwargs={'model_name': model},
+                daemon=True,
+            ).start()
 
         # ── 1. Main analysis (SOW / User Stories) ─────────────────────────
         pending_analysis = self.search([
@@ -749,8 +756,8 @@ class PresaleIQMixin:
                     vals['presaleiq_story_count'] = story_count
                 rec.sudo().write(vals)
                 if status == 'complete':
-                    _attach_if_missing(rec, base_url, api_key,
-                                       rec.presaleiq_analysis_id, 'PresaleIQ_')
+                    _refresh_documents(rec, base_url, api_key,
+                                       rec.presaleiq_analysis_id, 'PresaleIQ_SOW')
             except Exception as exc:
                 _logger.warning(
                     'PresaleIQ cron: error polling analysis #%s on %s#%s: %s',
@@ -776,7 +783,7 @@ class PresaleIQMixin:
                     continue
                 rec.sudo().write({'presaleiq_license_status': status})
                 if status == 'complete':
-                    _attach_if_missing(rec, base_url, api_key,
+                    _refresh_documents(rec, base_url, api_key,
                                        rec.presaleiq_license_analysis_id,
                                        'PresaleIQ_LicenseSizing')
             except Exception as exc:
